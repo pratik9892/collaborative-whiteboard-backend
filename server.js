@@ -16,7 +16,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "https://collaborative-whiteboard-frontend-9qpj2tva2.vercel.app",
+    origin: "https://collaborative-whiteboard-frontend-opal.vercel.app",
     methods: ['GET', 'POST'],
     credentials:true
   }
