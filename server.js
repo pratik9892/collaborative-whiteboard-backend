@@ -16,7 +16,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: "https://collaborative-whiteboard-frontend-9qpj2tva2.vercel.app",
     methods: ['GET', 'POST'],
     credentials:true
   }
@@ -43,6 +43,6 @@ app.get("/", (req, res) => {
 socketHandlers(io);
 
 // Start server
-server.listen(process.env.PORT, () => {
+server.listen(process.env.PORT || 5000, () => {
   console.log(`server is running at ${process.env.PORT}`);
 });
