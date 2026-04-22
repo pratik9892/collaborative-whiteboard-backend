@@ -1,5 +1,5 @@
-const roomUsers = {};       // Track users per room
-const roomMessages = {};    // Track messages per room
+const roomUsers = {};
+const roomMessages = {};
 
 export const socketHandlers = (io) => {
   io.on("connection", (socket) => {
@@ -11,91 +11,105 @@ export const socketHandlers = (io) => {
     socket.on("join-room", (roomId) => {
       if (!roomId) return;
 
-      // Prevent duplicate join
-      if (socket.roomId === roomId) {
-        console.log(`Socket ${socket.id} already in room ${roomId}`);
-        return;
-      }
-
       socket.roomId = roomId;
       socket.join(roomId);
 
-      // Init room users
+      console.log(`Socket ${socket.id} joined room ${roomId}`);
+
       if (!roomUsers[roomId]) {
         roomUsers[roomId] = new Set();
       }
 
       roomUsers[roomId].add(socket.id);
 
-      // Init messages if not exist
       if (!roomMessages[roomId]) {
         roomMessages[roomId] = [];
       }
 
-      // 🔥 Send chat history to new user
       socket.emit("init-messages", roomMessages[roomId]);
 
-      const count = roomUsers[roomId].size;
-
-      console.log(`User ${socket.id} joined room ${roomId}`);
-      console.log(`Room ${roomId} size:`, count);
-
-      io.to(roomId).emit("user-count", count);
+      io.to(roomId).emit("user-count", roomUsers[roomId].size);
     });
 
     // =========================
-    // DRAW EVENTS (SECURED)
+    // ✏️ FREE DRAW
     // =========================
     socket.on("draw-start", (data) => {
-      const roomId = socket.roomId;
-      if (!roomId) return;
-
-      socket.to(roomId).emit("draw-start", data);
+      if (!socket.roomId) return;
+      console.log("line start");
+      
+      socket.to(socket.roomId).emit("draw-start", {
+        ...data,
+        userId: socket.id,
+      });
     });
 
     socket.on("draw-move", (data) => {
-      const roomId = socket.roomId;
-      if (!roomId) return;
+      if (!socket.roomId) return;
 
-      socket.to(roomId).emit("draw-move", data);
+      socket.to(socket.roomId).emit("draw-move", {
+        ...data,
+        userId: socket.id,
+      });
     });
 
-    socket.on("draw-end", (data) => {
-      const roomId = socket.roomId;
-      if (!roomId) return;
+    socket.on("draw-end", () => {
+      if (!socket.roomId) return;
 
-      socket.to(roomId).emit("draw-end", data);
-    });
-
-    socket.on("clear-canvas", () => {
-      const roomId = socket.roomId;
-      if (!roomId) return;
-
-      io.to(roomId).emit("clear-canvas");
+      socket.to(socket.roomId).emit("draw-end", {
+        userId: socket.id,
+      });
     });
 
     // =========================
-    // CHAT EVENTS (SECURED)
+    // 🔥 SHAPES (FIXED)
+    // =========================
+    socket.on("draw-shape", (shape) => {
+      console.log("SERVER RECEIVED SHAPE:", shape);
+      const roomId = shape?.roomId || socket.roomId;
+
+      if (!roomId) {
+        console.log("❌ draw-shape failed: no roomId", shape);
+        return;
+      }
+
+      console.log("✅ Broadcasting shape to room:", roomId);
+
+      socket.to(roomId).emit("draw-shape", {
+        ...shape,
+        userId: socket.id,
+      });
+    });
+
+    // =========================
+    // CLEAR
+    // =========================
+    socket.on("clear-canvas", () => {
+      if (!socket.roomId) return;
+
+      io.to(socket.roomId).emit("clear-canvas");
+    });
+
+    // =========================
+    // CHAT
     // =========================
     socket.on("send-message", ({ message }) => {
-      const roomId = socket.roomId;
-      if (!roomId) return;
+      if (!socket.roomId) return;
 
-      // Save message
-      roomMessages[roomId].push(message);
-
-      // Send to all in room (including sender)
-      io.to(roomId).emit("receive-message", message);
+      roomMessages[socket.roomId].push(message);
+      io.to(socket.roomId).emit("receive-message", message);
     });
 
     // =========================
-    // CURSOR SYNC
+    // CURSOR
     // =========================
     socket.on("cursor-move", (data) => {
-      const roomId = socket.roomId;
-      if (!roomId) return;
+      if (!socket.roomId) return;
 
-      socket.to(roomId).emit("cursor-update", data);
+      socket.to(socket.roomId).emit("cursor-update", {
+        ...data,
+        userId: socket.id,
+      });
     });
 
     // =========================
@@ -107,14 +121,12 @@ export const socketHandlers = (io) => {
       if (roomId && roomUsers[roomId]) {
         roomUsers[roomId].delete(socket.id);
 
-        // If room empty → cleanup
         if (roomUsers[roomId].size === 0) {
           delete roomUsers[roomId];
-          delete roomMessages[roomId]; // 🔥 cleanup messages
+          delete roomMessages[roomId];
         }
 
-        const count = roomUsers[roomId]?.size || 0;
-        io.to(roomId).emit("user-count", count);
+        io.to(roomId).emit("user-count", roomUsers[roomId]?.size || 0);
       }
 
       console.log("Disconnected:", socket.id);
